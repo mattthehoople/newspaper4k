@@ -3,21 +3,21 @@
 # Copyright (c) Lucas Ou-Yang (codelucas)
 
 """
-Newspaper treats urls for news articles as critical components.
-Hence, we have an entire module dedicated to them.
+Functions for analyzing and parsing news article URLS. This module
+contains the logic for accepting or rejecting a link as a valid news
+article in Source.build() method.
 """
 
 import logging
 import re
 
-from urllib.parse import parse_qs, urljoin, urlparse, urlsplit, urlunsplit
+from typing import Optional
+from urllib.parse import parse_qs, urljoin, urlparse
 
 from tldextract import tldextract
 
 log = logging.getLogger(__name__)
 
-
-MAX_FILE_MEMO = 20000
 
 _STRICT_DATE_REGEX_PREFIX = r"(?<=\W)"
 DATE_REGEX = (
@@ -76,34 +76,42 @@ BAD_CHUNKS = [
     "donate",
     "shop",
     "admin",
+    "auth_user",
+    "emploi",
+    "annonces",
+    "blog",
+    "courrierdeslecteurs",
+    "page_newsletters",
+    "adserver",
+    "clicannonces",
+    "services",
+    "contribution",
+    "boutique",
+    "espaceclient",
 ]
 
-BAD_DOMAINS = ["amazon", "doubleclick", "twitter"]
+BAD_DOMAINS = [
+    "amazon",
+    "doubleclick",
+    "twitter",
+    "facebook",
+    "google",
+    "youtube",
+    "instagram",
+    "pinterest",
+]
 
 
-def remove_args(url, keep_params=(), frags=False):
-    """
-    Remove all param arguments from a url.
-    """
-    parsed = urlsplit(url)
-    filtered_query = "&".join(
-        qry_item
-        for qry_item in parsed.query.split("&")
-        if qry_item.startswith(keep_params)
-    )
-    if frags:
-        frag = parsed[4:]
-    else:
-        frag = ("",)
-
-    return urlunsplit(parsed[:3] + (filtered_query,) + frag)
-
-
-def redirect_back(url, source_domain):
+def redirect_back(url: str, source_domain: str) -> str:
     """
     Some sites like Pinterest have api's that cause news
     args to direct to their site with the real news url as a
     GET param. This method catches that and returns our param.
+    Args:
+        url (str): the url to check for a redirect
+        source_domain (str): the domain of the source url
+    Returns:
+        str: the redirected url if it exists, otherwise the original url
     """
     parse_data = urlparse(url)
     domain = parse_data.netloc
@@ -122,29 +130,32 @@ def redirect_back(url, source_domain):
     return url
 
 
-def prepare_url(url, source_url=None):
+def prepare_url(url: str, source_url: Optional[str] = None) -> str:
     """
-    Operations that purify a url, removes arguments,
-    redirects, and merges relatives with absolutes.
+    Operations that cleans an url, removes arguments,
+    redirects, and merges relative urls with absolute ones.
+    Args:
+        url (str): the url to prepare
+        source_url (Optional[str]): the source url
+    Returns:
+        str: the prepared url
     """
     try:
         if source_url is not None:
             source_domain = urlparse(source_url).netloc
             proper_url = urljoin(source_url, url)
             proper_url = redirect_back(proper_url, source_domain)
-            # proper_url = remove_args(proper_url)
         else:
-            # proper_url = remove_args(url)
             proper_url = url
     except ValueError as e:
-        log.critical("url %s failed on err %s" % (url, str(e)))
+        log.error("url %s failed on err %s", url, str(e))
         proper_url = ""
 
     return proper_url
 
 
-def valid_url(url, verbose=False, test=False):
-    """
+def valid_url(url: str, test: bool = False) -> bool:
+    r"""
     Is this URL a valid news-article url?
 
     Perform a regex check on an absolute url.
@@ -176,6 +187,11 @@ def valid_url(url, verbose=False, test=False):
 
     We also filter out articles with a subdomain or first degree path
     on a registered bad keyword.
+    Args:
+        url (str): the url to check
+        test (bool): whether to preprocess the url
+    Returns:
+        bool: True if the url is a valid article link, False otherwise
     """
     # If we are testing this method in the testing suite, we actually
     # need to preprocess the url like we do in the article's constructor!
@@ -184,16 +200,14 @@ def valid_url(url, verbose=False, test=False):
 
     # 11 chars is shortest valid url length, eg: http://x.co
     if url is None or len(url) < 11:
-        if verbose:
-            print("\t%s rejected because len of url is less than 11" % url)
+        log.debug("url %s rejected due to short length < 11", url)
         return False
 
     r1 = "mailto:" in url  # TODO not sure if these rules are redundant
     r2 = ("http://" not in url) and ("https://" not in url)
 
     if r1 or r2:
-        if verbose:
-            print("\t%s rejected because len of url structure" % url)
+        log.debug("url %s rejected due to mailto in link or no http(s) schema", url)
         return False
 
     path = urlparse(url).path
@@ -215,8 +229,7 @@ def valid_url(url, verbose=False, test=False):
 
         # if the file type is a media type, reject instantly
         if file_type and file_type not in ALLOWED_TYPES:
-            if verbose:
-                print("\t%s rejected due to bad filetype" % url)
+            log.debug("url %s rejected due to bad filetype (%s)", url, file_type)
             return False
 
         last_chunk = path_chunks[-1].split(".")
@@ -236,8 +249,7 @@ def valid_url(url, verbose=False, test=False):
     url_slug = path_chunks[-1] if path_chunks else ""
 
     if tld in BAD_DOMAINS:
-        if verbose:
-            print("%s caught for a bad tld" % url)
+        log.debug("url %s rejected due to bad domain (%s)", url, tld)
         return False
 
     if len(path_chunks) == 0:
@@ -250,55 +262,70 @@ def valid_url(url, verbose=False, test=False):
     if url_slug and (dash_count > 4 or underscore_count > 4):
         if dash_count >= underscore_count:
             if tld not in [x.lower() for x in url_slug.split("-")]:
-                if verbose:
-                    print("%s verified for being a slug" % url)
+                log.debug("url %s accepted due to title slug (%s)", url, url_slug)
                 return True
 
         if underscore_count > dash_count:
             if tld not in [x.lower() for x in url_slug.split("_")]:
-                if verbose:
-                    print("%s verified for being a slug" % url)
+                log.debug("url %s accepted due to title slug (%s)", url, url_slug)
                 return True
 
     # There must be at least 2 subpaths
     if len(path_chunks) <= 1:
-        if verbose:
-            print("%s caught for path chunks too small" % url)
+        log.debug(
+            "url %s rejected due to less than two path_chunks (%s)", url, path_chunks
+        )
         return False
 
     # Check for subdomain & path red flags
     # Eg: http://cnn.com/careers.html or careers.cnn.com --> BAD
     for b in BAD_CHUNKS:
         if b in path_chunks or b == subd:
-            if verbose:
-                print("%s caught for bad chunks" % url)
+            log.debug("url %s rejected due to bad chunk (%s)", url, b)
             return False
 
     match_date = re.search(DATE_REGEX, url)
 
     # if we caught the verified date above, it's an article
     if match_date is not None:
-        if verbose:
-            print("%s verified for date" % url)
+        log.debug("url %s accepted for date in path", url)
         return True
 
-    for GOOD in GOOD_PATHS:
-        if GOOD.lower() in [p.lower() for p in path_chunks]:
-            if verbose:
-                print("%s verified for good path" % url)
-            return True
+    if 2 <= len(path_chunks) <= 3 and re.search(r"\d{3,}$", path_chunks[-1]):
+        log.debug(
+            "url %s accepted for last path chunk being numeric (hopefully an"
+            " article-id) ",
+            url,
+        )
+        return True
 
-    if verbose:
-        print("%s caught for default false" % url)
+    if len(path_chunks) == 3 and re.search(r"\d{3,}$", path_chunks[1]):
+        log.debug(
+            "url %s accepted for before-last path chunk being numeric (hopefully an"
+            " article-id) ",
+            url,
+        )
+        return True
+
+    for good in GOOD_PATHS:
+        if good.lower() in [p.lower() for p in path_chunks]:
+            log.debug("url %s accepted for good path", url)
+            return True
+    log.debug("url %s rejected for default false", url)
     return False
 
 
-def url_to_filetype(abs_url):
+def url_to_filetype(abs_url: str) -> Optional[str]:
     """
     Input a URL and output the filetype of the file
     specified by the url. Returns None for no filetype.
     'http://blahblah/images/car.jpg' -> 'jpg'
     'http://yahoo.com'               -> None
+    Args:
+        abs_url (str): the url to parse
+    Returns:
+        Optional[str]: the file type of the url
+
     """
     path = urlparse(abs_url).path
     # Eliminate the trailing '/', we are extracting the file
@@ -315,33 +342,56 @@ def url_to_filetype(abs_url):
     return None
 
 
-def get_domain(abs_url, **kwargs):
-    """
-    returns a url's domain, this method exists to
-    encapsulate all url code into this file
+def get_domain(abs_url: str, **kwargs) -> Optional[str]:
+    """returns a url's domain part
+
+    Arguments:
+        abs_url(str): the url to parse
+
+    Returns:
+        str: the domain part of the url
     """
     if abs_url is None:
         return None
     return urlparse(abs_url, **kwargs).netloc
 
 
-def get_scheme(abs_url, **kwargs):
-    """ """
+def get_scheme(abs_url: str, **kwargs) -> Optional[str]:
+    """returns the url scheme (http, https, ftp, etc)
+
+    Arguments:
+        abs_url(str): the url to parse
+
+    Returns:
+        str: the scheme part of the url
+    """
     if abs_url is None:
         return None
     return urlparse(abs_url, **kwargs).scheme
 
 
-def get_path(abs_url, **kwargs):
-    """ """
+def get_path(abs_url: str, **kwargs) -> Optional[str]:
+    """returns the path part of a url (the part after the domain)
+
+    Arguments:
+        abs_url(str): the url to parse
+
+    Returns:
+        str: the path part of the url
+    """
     if abs_url is None:
         return None
     return urlparse(abs_url, **kwargs).path
 
 
-def is_abs_url(url):
-    """
-    this regex was brought to you by django!
+def is_abs_url(url: str) -> bool:
+    """Returns True if the url is an absolute url, False otherwise
+
+    Arguments:
+        url(str): the url to check
+
+    Returns:
+        bool: True if the url is an absolute url, False otherwise
     """
     regex = re.compile(
         r"^(?:http|ftp)s?://"  # http:// or https://

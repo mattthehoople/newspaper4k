@@ -6,6 +6,20 @@ Newspaper API
 .. autosummary::
    :toctree: generated
 
+Function calls
+--------------
+
+.. autofunction:: newspaper.article
+
+.. autofunction:: newspaper.build
+
+.. autofunction:: newspaper.mthreading.fetch_news
+
+.. autofunction:: newspaper.hot
+
+.. autofunction:: newspaper.languages
+
+
 Configuration
 -------------
 
@@ -41,10 +55,11 @@ Source
 .. autoclass:: newspaper.Source
 .. automethod:: newspaper.Source.__init__
 .. automethod:: newspaper.Source.build()
-.. automethod:: newspaper.Source.purge_articles()
 .. automethod:: newspaper.Source.feeds_to_articles()
 .. automethod:: newspaper.Source.categories_to_articles()
+.. automethod:: newspaper.Source.generate_articles()
 .. automethod:: newspaper.Source.download_articles()
+.. automethod:: newspaper.Source.download()
 .. automethod:: newspaper.Source.size()
 
 Category
@@ -55,3 +70,10 @@ Category
 Feed
 ----
 .. autoclass:: newspaper.source.Feed
+
+
+Exceptions
+----------
+.. autoclass:: newspaper.ArticleException
+
+.. autoclass:: newspaper.ArticleBinaryDataException

@@ -1,2 +1,4 @@
 doubleclick
 te
+shotcut
+annonces

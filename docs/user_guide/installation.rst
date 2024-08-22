@@ -29,7 +29,7 @@ If you want to install the latest version from Github, you can do so::
 Requirements
 ------------
 
-``newspaper4k`` requires Python 3.7 and above to run. It was not tested on
+``newspaper4k`` requires Python 3.8 and above to run. It was not tested on
 lower versions.
 
 The newspaper4k package has the following dependencies:
@@ -43,7 +43,6 @@ The newspaper4k package has the following dependencies:
 * tldextract
 * Pillow
 * PyYAML
-* cssselect
 * feedfinder2
 * tinysegmenter
 * pythainlp

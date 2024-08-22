@@ -3,6 +3,7 @@
 .DS_Store
 .idea
 .pypirc
+.conda
 
 # C extensions
 *.so
@@ -41,6 +42,7 @@ nosetests.xml
 .project
 .pydevproject
 venv
+.venv
 .vscode
 
 # Ruff cache
@@ -48,6 +50,7 @@ venv
 
 
 # Local debug
-_docs/
+_docs
 tests/localdebug
 requirements_poetry.txt
+tmp
